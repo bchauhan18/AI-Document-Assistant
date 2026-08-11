@@ -1,9 +1,10 @@
-from flask import Flask, request
+from flask import Flask, request, render_template
 
 from services.rag_service import process_pdf, search_chunks
 
 
 app = Flask(__name__)
+
 
 chunks = None
 embeddings = None
@@ -16,65 +17,58 @@ def home():
     global chunks, embeddings, index
 
     answer = ""
+    message = ""
 
     if request.method == "POST":
 
         pdf = request.files.get("pdf")
-        question = request.form.get("question")
+        question = request.form.get("question", "").strip()
 
-        # Process PDF only when a new PDF is uploaded
+        # Process PDF when a new PDF is uploaded
         if pdf and pdf.filename:
 
+            if not pdf.filename.lower().endswith(".pdf"):
+                message = "Please upload a PDF file."
+
+                return render_template(
+                    "index.html",
+                    answer=answer,
+                    message=message
+                )
+
             pdf_path = "uploads/" + pdf.filename
+
             pdf.save(pdf_path)
 
             chunks, embeddings, index = process_pdf(pdf_path)
 
-        # Ask question using the already processed PDF
-        if question and index is not None:
+            message = "PDF uploaded and processed successfully."
 
-            answer = search_chunks(
-                question,
-                chunks,
-                index
-            )
+        # Check whether a PDF has been processed
+        if question:
 
-    return f"""
-    <h1>AI Document Assistant</h1>
+            if index is None:
 
-    <form method="POST" enctype="multipart/form-data">
+                message = "Please upload a PDF before asking a question."
 
-        <h3>Upload PDF</h3>
+            else:
 
-        <input
-            type="file"
-            name="pdf"
-            accept=".pdf"
-        >
+                answer = search_chunks(
+                    question,
+                    chunks,
+                    index
+                )
 
-        <br><br>
+        else:
 
-        <h3>Ask a question</h3>
+            if not message:
+                message = "Please enter a question."
 
-        <input
-            type="text"
-            name="question"
-            placeholder="Ask something about the PDF"
-            style="width: 500px; padding: 10px;"
-        >
-
-        <br><br>
-
-        <button type="submit">
-            Ask
-        </button>
-
-    </form>
-
-    <h2>Answer:</h2>
-
-    <p>{answer}</p>
-    """
+    return render_template(
+        "index.html",
+        answer=answer,
+        message=message
+    )
 
 
 if __name__ == "__main__":
