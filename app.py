@@ -1,24 +1,80 @@
-from flask import Flask
+from flask import Flask, request
+
 from services.rag_service import process_pdf, search_chunks
+
 
 app = Flask(__name__)
 
-chunks, embeddings, index = process_pdf("uploads/sample.pdf")
+chunks = None
+embeddings = None
+index = None
 
 
-@app.route("/")
+@app.route("/", methods=["GET", "POST"])
 def home():
 
-    question = "What are the HR and opinion-based topics?"
+    global chunks, embeddings, index
 
-    answer = search_chunks(question, chunks, index)
+    answer = ""
 
-    print("=" * 50)
-    print("Relevant Chunks")
-    print("=" * 50)
-    print(answer)
+    if request.method == "POST":
 
-    return f"<h1>{answer}</h1>"
+        pdf = request.files.get("pdf")
+        question = request.form.get("question")
+
+        # Process PDF only when a new PDF is uploaded
+        if pdf and pdf.filename:
+
+            pdf_path = "uploads/" + pdf.filename
+            pdf.save(pdf_path)
+
+            chunks, embeddings, index = process_pdf(pdf_path)
+
+        # Ask question using the already processed PDF
+        if question and index is not None:
+
+            answer = search_chunks(
+                question,
+                chunks,
+                index
+            )
+
+    return f"""
+    <h1>AI Document Assistant</h1>
+
+    <form method="POST" enctype="multipart/form-data">
+
+        <h3>Upload PDF</h3>
+
+        <input
+            type="file"
+            name="pdf"
+            accept=".pdf"
+        >
+
+        <br><br>
+
+        <h3>Ask a question</h3>
+
+        <input
+            type="text"
+            name="question"
+            placeholder="Ask something about the PDF"
+            style="width: 500px; padding: 10px;"
+        >
+
+        <br><br>
+
+        <button type="submit">
+            Ask
+        </button>
+
+    </form>
+
+    <h2>Answer:</h2>
+
+    <p>{answer}</p>
+    """
 
 
 if __name__ == "__main__":

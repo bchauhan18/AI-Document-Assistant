@@ -1,7 +1,7 @@
 from utils.pdf_reader import extract_text
 from utils.chunker import chunk_text
 from utils.embeddings import create_embeddings
-from utils.vector_store import create_vector_store, search_vector_store
+from utils.vector_store import create_vector_store
 from utils.gemini import ask_gemini
 
 
@@ -13,19 +13,32 @@ def process_pdf(pdf_path):
 
     embeddings = create_embeddings(chunks)
 
-    index = create_vector_store(embeddings)
+    index = create_vector_store(chunks, embeddings)
 
     return chunks, embeddings, index
 
+
 def search_chunks(question, chunks, index):
 
-    question_embedding = create_embeddings([question])
+    retriever = index.as_retriever(
+        search_kwargs={"k": 6}
+    )
 
-    indices = search_vector_store(index, question_embedding[0])
+    documents = retriever.invoke(question)
 
-    results = [chunks[i] for i in indices]
+    print("QUESTION:", question)
 
-    context = "\n\n".join(results)
+    print("=" * 50)
+    print("Retrieved Chunks")
+    print("=" * 50)
+
+    for document in documents:
+        print(document.page_content)
+        print("-" * 50)
+
+    context = "\n\n".join(
+        document.page_content for document in documents
+    )
 
     answer = ask_gemini(question, context)
 
